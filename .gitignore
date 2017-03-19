@@ -1,0 +1,4 @@
+/.sam/
+/tmp/
+params/*
+!params/param.sample.json

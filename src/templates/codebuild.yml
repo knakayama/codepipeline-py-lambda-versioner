@@ -1,0 +1,37 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: CodePipeline Py Lambda Versioner CodeBuild Stack
+
+Parameters:
+  StackName:
+    Type: String
+  CodeBuildRoleArn:
+    Type: String
+  CodeBuildBucket:
+    Type: String
+
+Resources:
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Ref StackName
+      ServiceRole: !Ref CodeBuildRoleArn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/ubuntu-base:14.04
+        EnvironmentVariables:
+          - Name: AWS_REGION
+            Value: !Ref AWS::Region
+          - Name: S3_BUCKET
+            Value: !Ref CodeBuildBucket
+      Source:
+        Type: CODEPIPELINE
+
+Outputs:
+  CodeBuildProject:
+    Value: !Ref CodeBuildProject
+  CodeBuildProjectArn:
+    Value: !GetAtt CodeBuildProject.Arn

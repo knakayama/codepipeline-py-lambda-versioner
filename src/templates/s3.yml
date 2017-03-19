@@ -1,0 +1,18 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: CodePipeline Py Lambda Versioner S3 Stack
+
+Resources:
+  ArtifactStoreBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+  CodeBuildBucket:
+    Type: AWS::S3::Bucket
+
+Outputs:
+  ArtifactStoreBucket:
+    Value: !Ref ArtifactStoreBucket
+  CodeBuildBucket:
+    Value: !Ref CodeBuildBucket

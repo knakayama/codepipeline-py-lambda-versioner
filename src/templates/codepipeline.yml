@@ -1,0 +1,133 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: CodePipeline Py Lambda Versioner CodePipeline Stack
+
+Parameters:
+  Owner:
+    Type: String
+    Default: knakayama
+  Repo:
+    Type: String
+    Default: aws-sam-simple
+  StackName:
+    Type: String
+  OAuthToken:
+    Type: String
+    NoEcho: true
+  ArtifactStoreBucket:
+    Type: String
+  PipelineRoleArn:
+    Type: String
+  CodePipelineSNSTopic:
+    Type: String
+  CodeBuildProject:
+    Type: String
+  CFnRoleArn:
+    Type: String
+  TemplateFilePath:
+    Type: String
+    Default: packaged.yml
+  StackConfig:
+    Type: String
+    Default: param.json
+  FunctionName:
+    Type: String
+
+Resources:
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Ref StackName
+      RoleArn: !Ref PipelineRoleArn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactStoreBucket
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: download-source
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              Configuration:
+                Owner: !Ref Owner
+                Repo: !Ref Repo
+                Branch: master
+                OAuthToken: !Ref OAuthToken
+              OutputArtifacts:
+                - Name: SourceOutput
+        - Name: Test
+          Actions:
+            - InputArtifacts:
+                - Name: SourceOutput
+              Name: testing
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: TestOutput
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+        - Name: Build
+          Actions:
+            - InputArtifacts:
+                - Name: TestOutput
+              Name: create-changeset
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              OutputArtifacts:
+                - Name: BuildOutput
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                ChangeSetName: changeset
+                RoleArn: !Ref CFnRoleArn
+                Capabilities: CAPABILITY_IAM
+                StackName: aws-sam-simple
+                TemplatePath: !Sub TestOutput::${TemplateFilePath}
+        - Name: Approval
+          Actions:
+            - Name: approve-changeset
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Version: 1
+                Provider: Manual
+              Configuration:
+                NotificationArn: !Ref CodePipelineSNSTopic
+                ExternalEntityLink: !Sub https://console.aws.amazon.com/cloudformation/home?region=${AWS::Region}
+                CustomData: Please review changeset
+        - Name: Deploy
+          Actions:
+            - Name: execute-changeset
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Version: 1
+                Provider: CloudFormation
+              Configuration:
+                StackName: aws-sam-simple
+                ActionMode: CHANGE_SET_EXECUTE
+                ChangeSetName: changeset
+                RoleArn: !Ref CFnRoleArn
+                OutputFileName: deploy-output.json
+              OutputArtifacts:
+                - Name: DeployOutput
+        - Name: Invoke
+          Actions:
+            - Name: publish-version
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: 1
+                Provider: Lambda
+              Configuration:
+                FunctionName: !Ref FunctionName
+              InputArtifacts:
+                - Name: DeployOutput

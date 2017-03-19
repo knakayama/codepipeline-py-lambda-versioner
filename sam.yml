@@ -1,0 +1,74 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: CodePipeline Py Lambda Versioner SAM Stack
+
+Parameters:
+  Email:
+    Type: String
+  StackName:
+    Type: String
+  OAuthToken:
+    Type: String
+
+Resources:
+  S3:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/s3.yml
+
+  SNS:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/sns.yml
+      Parameters:
+        Email: !Ref Email
+
+  IAM:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/iam.yml
+      Parameters:
+        ArtifactStoreBucket: !GetAtt S3.Outputs.ArtifactStoreBucket
+        CodeBuildBucket: !GetAtt S3.Outputs.CodeBuildBucket
+        CodePipelineSNSTopic: !GetAtt SNS.Outputs.CodePipelineSNSTopic
+        StackName: !Ref StackName
+
+  CodeBuild:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/codebuild.yml
+      Parameters:
+        CodeBuildRoleArn: !GetAtt IAM.Outputs.CodeBuildRoleArn
+        CodeBuildBucket: !GetAtt S3.Outputs.CodeBuildBucket
+        StackName: !Ref StackName
+
+  CodePipeline:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/codepipeline.yml
+      Parameters:
+        ArtifactStoreBucket: !GetAtt S3.Outputs.ArtifactStoreBucket
+        PipelineRoleArn: !GetAtt IAM.Outputs.PiplineRoleArn
+        CodePipelineSNSTopic: !GetAtt SNS.Outputs.CodePipelineSNSTopic
+        CodeBuildProject: !GetAtt CodeBuild.Outputs.CodeBuildProject
+        CFnRoleArn: !GetAtt IAM.Outputs.CFnRoleArn
+        StackName: !Ref StackName
+        OAuthToken: !Ref OAuthToken
+        FunctionName: !Ref PyLambdaVersioner
+
+  PyLambdaVersioner:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/py-lambda-versioner
+      Handler: index.handler
+      Runtime: python2.7
+      Policies:
+        - AmazonS3FullAccess
+        - AWSCodePipelineCustomActionAccess
+        - Version: 2012-10-17
+          Statement:
+            - Sid: LambdaAccess
+              Effect: Allow
+              Action: lambda:PublishVersion
+              Resource: "*"

@@ -1,0 +1,7 @@
+{
+  "Parameters": {
+    "Email": "_YOUR_EMAIL_",
+    "StackName": "codepipeline-py-lambda-versioner",
+    "OAuthToken" : "_YOUR_TOKEN_"
+  }
+}
